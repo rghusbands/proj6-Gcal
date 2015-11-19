@@ -311,6 +311,9 @@ def busyTimes(cal_list):
 
     message.pop() #pops last ' AND '
     message = ''.join(message) #joins list
+
+    #find a way to say no busy times if no events exist!
+
     flask.flash(message) #displays busy times
 
 def readableDate(date): #formats from arrow to readable date
