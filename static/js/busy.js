@@ -4,8 +4,8 @@
  * version.  (See Makefile)
  */
 "use strict";
-var moment = require('moment');
-var daterangepicker = require('bootstrap-daterangepicker');
+var moment = require('./node_modules/moment');
+var daterangepicker = require('./node_modules/bootstrap-daterangepicker');
 
 /* Export to global environment */ 
 window.moment = moment;
