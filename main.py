@@ -290,6 +290,8 @@ def freeTimes(calendar_list):
     all_events_list = addNights(all_events_list) #add nights as events
     sorted_events = sortEvents(all_events_list) #sort events
     free_times = getFreeTimes(sorted_events) #gets list of free times
+
+    #into a readable format for flask.flash
     for times in free_times:
         message = []
         message.append(readableDate(times['start']))
@@ -371,6 +373,7 @@ def sortEvents(list):
     return sorted_times
 
 
+#gets list of events based off selected calendars
 def calEventList(cal_list):
     begin_date = flask.session['begin_date'] #gets user inputed start date
     end_date = flask.session['end_date'] #gets user inputed end date
