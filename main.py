@@ -201,13 +201,10 @@ def getCalendars():
     app.logger.debug("Get selected caldendars")
     selected_calendars = request.form.getlist('calendar')
     full_calendars = []
-    for items in selected_calendars:
-        for cal in flask.session['calendars']:
-            if items == cal['id']:
-                #Takes calendar ids and gets list
-                #holding all calendar info.
-                full_calendars.append(cal)
-    busyTimes(full_calendars) #finds busy and displays busy times
+    for cal in flask.session['calendars']:
+        if cal['id'] in selected_calendars:
+            full_calendars.append(cal)
+    freeTimes(full_calendars)
     return flask.redirect(flask.url_for("index"))
 
 ####
@@ -278,47 +275,119 @@ def next_day(isotext):
 #  Functions (NOT pages) that return some information
 #
 ####
-def busyTimes(cal_list):
-    message = [] #string list turned into displayed message
+
+def freeTimes(calendar_list):
+    cal_event_list = calEventList(calendar_list)
+    #put event times into one list
+    all_events_list = []
+    for cal in cal_event_list:
+        if cal: #In case list is empty
+            for event in cal:
+                ev_start = arrow.get(event['start']).to('local') #to local time
+                ev_end = arrow.get(event['end']).to('local')
+                all_events_list.append({'start':ev_start, 'end':ev_end})
+
+    all_events_list = addNights(all_events_list) #add nights as events
+    sorted_events = sortEvents(all_events_list) #sort events
+    free_times = getFreeTimes(sorted_events) #gets list of free times
+    for times in free_times:
+        message = []
+        message.append(readableDate(times['start']))
+        message.append(" to ")
+        message.append(readableDate(times['end']))
+        message = ''.join(message)
+        flask.flash(message)
+
+
+def readableDate(date): #formats from arrow object to readable date
+    return date.format('HH:mm MM/DD/YY')
+
+
+def getFreeTimes(sorted_list):
+
+    #gets rid of overlapping events
+    improved_sorted_list = eliminateDuplicates(sorted_list)
+
+    free_times = []
+#Adds times from end of events to beginning of next events to free times list
+    for i in range(len(improved_sorted_list)-1):
+        event = improved_sorted_list[i]
+        next_event = improved_sorted_list[i+1]
+        if (event['end'] < next_event['start']):
+            free_times.append({'start':event['end'], 'end':next_event['start']})
+    return free_times
+
+
+#gets rid of duplicate busy times
+def eliminateDuplicates(list):
+    new_list = []
+    list_size = len(list)
+    for i in range(list_size-1):
+        event = list[i]
+        next_event = list[i+1]
+#If the next events start time is before the previous events end time then
+#the previous events end time because the next events start time
+        event['end'].replace
+        if (event['end'] > next_event['start'] and event['end'] > next_event['end']):
+            new_list.append({'start':event['start'], 'end':event['end']})
+            list[i+1]['end'] = event['end'] #prevents problems with next iteration
+        elif (event['end'] > next_event['start']):
+            new_list.append({'start':event['start'], 'end':next_event['start']})
+        else:
+            new_list.append({'start':event['start'], 'end':event['end']})
+        #print(i)
+    #add last event to new_list
+    new_list.append(list[list_size-1])
+    return new_list
+
+
+#add nights as events so free time is from 9am-5pm(normal work day)
+def addNights(list):
+    day_count = 0
+    start_date = arrow.get(flask.session['begin_date'])
+    end_date = arrow.get(flask.session['end_date'])
+    for day in arrow.Arrow.span_range('day', start_date, end_date): #goes through day range
+        early_morning = {'start':day[0], 'end':day[0].replace(hours=+9)}
+        late_nights = {'start':day[1].replace(hours=-7).replace(seconds=+.000001), 'end':day[1].replace(seconds=+.000001)}
+        list.append(early_morning)
+        list.append(late_nights)
+    return list
+
+
+#returns sorted list of events based off start times
+def sortEvents(list):
+    start_times = []
+    #puts all the starts in a list
+    for ev in list: #ev is event
+        start_times.append(ev['start'])
+    #sorts start times
+    start_times.sort()
+    sorted_times = []
+    #puts ordered start times with the respective end times
+    for times in start_times:
+        for ev in list:
+            if (times == ev['start']):
+                sorted_times.append({'start':ev['start'], 'end':ev['end']})
+    return sorted_times
+
+
+def calEventList(cal_list):
     begin_date = flask.session['begin_date'] #gets user inputed start date
     end_date = flask.session['end_date'] #gets user inputed end date
-    end_date = arrow.get(end_date).replace(hours=+24) #add 24 hours to include whole day
+    end_date = arrow.get(end_date).replace(hours=+24).isoformat() #add 24 hours to include whole day
+    busy_times = []
     for cal in cal_list:
-        busy_times = []
-        calID = cal['id'] #gets individual ids
-        cal_name = cal['summary']
-        events = gcal_service.events().list(calendarId=calID, timeMin=begin_date, timeMax=end_date) #gets data based off ids
-        events = events.execute()['items'] #gets events in 'items'
+        calID = cal['id']
+        freebusy_query = {
+            "timeMin" : begin_date,
+            "timeMax" : end_date,
+            "items" : [{ "id" : calID }]
+        }
+        result = gcal_service.freebusy().query(body=freebusy_query).execute()
+        result_times = result['calendars'][calID]['busy']
+        busy_times.append(result_times)
+    return busy_times
 
-        for ev in events: #goes through and records busy times
-            ev_start = ev['start']['dateTime']
-            ev_end = ev['end']['dateTime']
-            busy_times.append({'ev_start':ev_start, 'ev_end':ev_end})
-
-        calMessage = ['Calendar ' + cal_name, ': '] #list for message
-
-        for ev in busy_times: #creates message in a readable format
-            start = readableDate(ev['ev_start'])
-            end = readableDate(ev['ev_end'])
-            evMessage = start + ' - ' + end
-            calMessage.append(evMessage)
-            calMessage.append(' and ')
-
-        calMessage.pop() #pops last ' and '
-        calMessage = ''.join(calMessage) #combines list together
-        message.append(calMessage)
-        message.append(' AND ')
-
-    message.pop() #pops last ' AND '
-    message = ''.join(message) #joins list
-
-    #find a way to say no busy times if no events exist!
-
-    flask.flash(message) #displays busy times
-
-def readableDate(date): #formats from arrow to readable date
-    normal = arrow.get(date)
-    return normal.format('HH:mm MM/DD/YY')
 
 def list_calendars(service):
     """
