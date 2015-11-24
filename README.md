@@ -1,3 +1,10 @@
+#Proj7
+Obtain busy times from google calendar api and use them to display free times available for meetings.
+
+
+
+#INSTRUCTIONS FOR PROJECT 6 (previous project)
+
 # proj6-Gcal
 Snarf appointment data from a selection of a user's Google calendars 
 
