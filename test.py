@@ -7,9 +7,14 @@ import main
 
 
 
-def test_free_times1():
+def test1():
     print("")
 
 
-def test_free_times2():
+#currently failing test
+def test2():
     print("lol")
+    string = "loasdfadsfl"
+    assert(string == "lol")
+
+

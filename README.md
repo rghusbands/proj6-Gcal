@@ -1,3 +1,12 @@
+#Proj8
+Meet Me application that uses multiple google calendars users and checks their free times to see when they can meet. Simply follow the instruction on the app!
+
+ERRORS:
+-can't seem to use the same browser
+    -uses cookies to know when different user
+-make half screen addMember page not stuck to the wall
+    -appears to be firefox issue. Chrome doesn't stick to the side
+
 #Proj7
 Obtain busy times from google calendar api and use them to display free times available for meetings.
 

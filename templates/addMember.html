@@ -20,47 +20,23 @@
 
 </head>
 
+<center><h1>Adding Member</h1></center>
+
 <body>
 <div class="container">
 
-{% if session.final_proposal is defined %}
-    <center><h1>Meeting Proposal</h1></center>
-
-{% endif %}
-
-{% if not session.final_proposal is defined %}
-    <center><h1>Meet Me Project</h1></center>
-
-{% if not session.finalMeetingID is defined %}
-<div class="row">
-    <h2>Finalize:</h2>
-</div>
-<div class="row">
-    <i>Please wait until everyone has entered their busy times after giving them the url given below after you submit your busy times. Then press the button with given key so Meet Me Messages displays potential meetings times.
-    </i>
-</div>
-<div class="row">
-    <form action="/finalizeMeeting" method="post">
-        <input class"col-md-4" name="finalMeetingID" placeholder="MeetingID (ex. 384954)">
-        <button class="btn btn-primary" type="submit">Finalize</button>
-    </form>
-</div>
-{% endif %}
-
-{% if session.finalMeetingID is defined %}
 <div class="row">
     <h2>Instructions:</h2>
 </div>
 <div class="row">
-    <i>Select your desired date range and then choose the calendars you'd like to use to get your busy times. Once you submit your calendars you can wait for the meeting proposer to contact you which time he/she would like to meet at.</i>
+    <i>Please enter date range and calendars below so Meeting proposer can see when you are available.</i>
 </div>
-{% endif %}
 
 <div class="row">
     <h2>Date range:</h2>
 </div>
 <div class="row">
-  <form action="/setrange" method="post">
+  <form action="/setrangeNewMember" method="post">
   <input type="text" name="daterange" size="16"
     {% if session.daterange is defined %}
          value="{{session.daterange}}"
@@ -114,18 +90,14 @@
 {% endif %}
 </div>
     
-{% endif %}
-
-{% if not session.finalMeetingID is defined %}
 <div class="row">
-    {% if not session.final_proposal is defined %}
-        <h2>Meet Me Messages:</h2>
-    {% endif %}
-    {% if session.final_proposal is defined %}
-        <h2>Potential Meeting times below:</h2>
-    {% endif %}
+    <h2>Meet Me Messages:</h2>
 </div>
-{% endif %}
+
+<!--
+If there are any warnings or other messages from a prior action, they appear above the rest of the content, just until the next action.
+-->
+
 <div class="row">
 {% with messages = get_flashed_messages() %}
   {% if messages %}
@@ -137,9 +109,6 @@
   {% endif %}
 {% endwith %}
 </div>
-{% if session.final_proposal is defined %}
-    <h4>Please don't refresh the page. Restart server to start over!</h4>
-{% endif %}
 
 </div>  <!--container (for bootstrap)-->
 </body>

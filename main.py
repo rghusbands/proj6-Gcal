@@ -20,15 +20,33 @@ import httplib2   # used in oauth2 flow
 # Google API for services
 from apiclient import discovery
 
+# Mongo database
+from pymongo import MongoClient
+from bson.objectid import ObjectId
+
+# random int for key
+from random import randint
+
 ###
 # Globals
 ###
 import CONFIG
 app = flask.Flask(__name__)
 
+
+try:
+    dbclient = MongoClient(CONFIG.MONGO_URL)
+    db = dbclient.MeetMe
+    collection = db.dated
+
+except:
+    print("Failure opening database. Is Mongo running? Correct password?")
+    sys.exit(1)
+
 SCOPES = 'https://www.googleapis.com/auth/calendar.readonly'
 CLIENT_SECRET_FILE = CONFIG.GOOGLE_LICENSE_KEY  ## You'll need this
 APPLICATION_NAME = 'MeetMe'
+
 
 #############################
 #
@@ -43,6 +61,7 @@ def index():
   if 'begin_date' not in flask.session:
     init_session_values()
   return render_template('index.html')
+
 
 @app.route("/choose")
 def choose():
@@ -177,12 +196,78 @@ def oauth2callback():
 #
 #####
 
+#Add new members to the meet me app
+#Seems to need to be a different browser
+@app.route('/addMembers')
+def addMember():
+    key = request.args.get('key')
+    flask.session['finalMeetingID'] = key
+    return flask.redirect(flask.url_for("index"))
+
+
+@app.route('/finalizeMeeting', methods=['POST'])
+def finalizeMeeting():
+    key = request.form.get('finalMeetingID')
+
+    #checks to see if key can be turned into int
+    try:
+        int(key)
+    except:
+        flask.flash("Invalid Key")
+        return flask.redirect(flask.url_for("index"))
+
+    #if key is a number check valid number
+    if (99999 < int(key) < 1000000):
+        """valid key"""
+    else:
+        flask.flash("Invalid Key")
+        return flask.redirect(flask.url_for("index"))
+
+    #checks to see if id is even in database
+    try:
+        validate_key_count = 0
+        for record in collection.find({"type":"date_range"}):
+            if (record["id"] == key):
+                validate_key_count+=1
+            else:
+                "not a match"
+        if validate_key_count == 0:
+            flask.flash("No matching keys in database")
+            return flask.redirect(flask.url_for("index"))
+        else:
+            """there are matches in the collection"""
+    except:
+        flask.flash("No matching keys in database")
+        return flask.redirect(flask.url_for("index"))
+
+    start_end_tuple = mergeDateRanges(key)
+    if (start_end_tuple == -1):
+        flask.flash("No overlapping dates in date ranges between users")
+        collection.remove({})
+        return flask.redirect(flask.url_for("index"))
+    start_date = start_end_tuple['start_date']
+    end_date = start_end_tuple['end_date']
+
+    all_events_list = getEvents(key)
+
+    flask.session['final_proposal'] = 'true'
+
+    freeTimes(all_events_list, start_date, end_date)
+
+    #clears database
+    collection.remove({})
+    return flask.redirect(flask.url_for("index"))
+
+
 @app.route('/setrange', methods=['POST'])
 def setrange():
+
     """
     User chose a date range with the bootstrap daterange
     widget.
     """
+
+
     app.logger.debug("Entering setrange")
     flask.flash("Setrange gave us '{}'"
             .format(request.form.get('daterange')))
@@ -191,6 +276,19 @@ def setrange():
     daterange_parts = daterange.split()
     flask.session['begin_date'] = interpret_date(daterange_parts[0])
     flask.session['end_date'] = interpret_date(daterange_parts[2])
+    key = str(randint(100000,999999))
+    flask.session['meetingID'] = key
+    try:
+        key = flask.session['finalMeetingID']
+        flask.session['meetingID'] = key
+    except:
+        """no final meeting id yet"""
+    record = {"type": "date_range",
+                    "id": key,
+                    "start_date": flask.session['begin_date'],
+                    "end_date": flask.session['end_date']
+                    }
+    collection.insert(record)
     app.logger.debug("Setrange parsed {} - {}  dates as {} - {}".format(
       daterange_parts[0], daterange_parts[1],
       flask.session['begin_date'], flask.session['end_date']))
@@ -200,11 +298,36 @@ def setrange():
 def getCalendars():
     app.logger.debug("Get selected caldendars")
     selected_calendars = request.form.getlist('calendar')
+    meetingID = str(flask.session['meetingID'])
+    try:
+        flask.session['finalMeetingID']
+        flask.flash("Thanks for submitting. Please wait for proposer to get back to you!")
+    except:
+        flask.flash("This is the key to finalize below.")
+        flask.flash(meetingID)
+        flask.flash("Below is the url to provide to other meeting participants.")
+        message = "ix.cs.uoregon.edu:6996/addMembers?key=" + meetingID
+        flask.flash(message)
+
     full_calendars = []
     for cal in flask.session['calendars']:
         if cal['id'] in selected_calendars:
             full_calendars.append(cal)
-    freeTimes(full_calendars)
+    cal_event_list = calEventList(full_calendars)
+    #put event times into one list
+    for cal in cal_event_list:
+        if cal: #In case list is empty
+            for event in cal:
+                #to local time below
+                ev_start = arrow.get(event['start']).to('local')
+                ev_end = arrow.get(event['end']).to('local')
+                record = { "type":"busy_times",
+                            "start": ev_start.isoformat(),
+                            "end": ev_end.isoformat(),
+                            "id": flask.session['meetingID']
+                            }
+                collection.insert(record)
+
     return flask.redirect(flask.url_for("index"))
 
 ####
@@ -227,7 +350,7 @@ def init_session_values():
     flask.session["daterange"] = "{} - {}".format(
         tomorrow.format("MM/DD/YYYY"),
         nextweek.format("MM/DD/YYYY"))
-    # Default time span each day, 8 to 5
+    # Default time span each day, 9 to 5
     flask.session["begin_time"] = interpret_time("9am")
     flask.session["end_time"] = interpret_time("5pm")
 
@@ -276,18 +399,42 @@ def next_day(isotext):
 #
 ####
 
-def freeTimes(calendar_list):
-    cal_event_list = calEventList(calendar_list)
-    #put event times into one list
-    all_events_list = []
-    for cal in cal_event_list:
-        if cal: #In case list is empty
-            for event in cal:
-                ev_start = arrow.get(event['start']).to('local') #to local time
-                ev_end = arrow.get(event['end']).to('local')
-                all_events_list.append({'start':ev_start, 'end':ev_end})
+def getEvents(key):
+    list = []
+    for record in collection.find({"type": "busy_times"}):
+        if (record['id'] == key):
+            start = record['start']
+            end = record['end']
+            start = arrow.get(start)
+            end = arrow.get(end)
+            pair = {'start': start, 'end': end}
+            list.append(pair)
+    return list
 
-    all_events_list = addNights(all_events_list) #add nights as events
+def mergeDateRanges(key):
+    starts = []
+    ends = []
+    for record in collection.find({"type":"date_range"}):
+        if (record["id"] == key):
+            start = record["start_date"]
+            end = record["end_date"]
+            starts.append(start)
+            ends.append(end)
+    starts.sort()
+    ends.sort()
+    start = starts[-1]
+    end = ends[0]
+    #changes the end date to work properly in the free times function
+    end = arrow.get(end).replace(hours=+24).isoformat()
+    if start <= end:
+        return {'start_date': start, 'end_date': end}
+    else:
+        return -1
+
+def freeTimes(all_events_list, start_date, end_date):
+
+    #add nights as events
+    all_events_list = addNights(all_events_list, start_date, end_date)
     sorted_events = sortEvents(all_events_list) #sort events
     free_times = getFreeTimes(sorted_events) #gets list of free times
 
@@ -303,7 +450,6 @@ def freeTimes(calendar_list):
 
 def readableDate(date): #formats from arrow object to readable date
     return date.format('HH:mm MM/DD/YY')
-
 
 def getFreeTimes(sorted_list):
 
@@ -337,17 +483,15 @@ def eliminateDuplicates(list):
             new_list.append({'start':event['start'], 'end':next_event['start']})
         else:
             new_list.append({'start':event['start'], 'end':event['end']})
-        #print(i)
     #add last event to new_list
     new_list.append(list[list_size-1])
     return new_list
 
 
 #add nights as events so free time is from 9am-5pm(normal work day)
-def addNights(list):
-    day_count = 0
-    start_date = arrow.get(flask.session['begin_date'])
-    end_date = arrow.get(flask.session['end_date'])
+def addNights(list, sd, ed):
+    start_date = arrow.get(sd)
+    end_date = arrow.get(ed).replace(hours=-24)
     for day in arrow.Arrow.span_range('day', start_date, end_date): #goes through day range
         early_morning = {'start':day[0], 'end':day[0].replace(hours=+9)}
         late_nights = {'start':day[1].replace(hours=-7).replace(seconds=+.000001), 'end':day[1].replace(seconds=+.000001)}
@@ -378,6 +522,7 @@ def calEventList(cal_list):
     begin_date = flask.session['begin_date'] #gets user inputed start date
     end_date = flask.session['end_date'] #gets user inputed end date
     end_date = arrow.get(end_date).replace(hours=+24).isoformat() #add 24 hours to include whole day
+    #flask.session['end_date'] = end_date
     busy_times = []
     for cal in cal_list:
         calID = cal['id']
@@ -403,7 +548,7 @@ def list_calendars(service):
     """
     app.logger.debug("Entering list_calendars")
     calendar_list = service.calendarList().list().execute()["items"]
-    result = [ ]
+    result = []
     for cal in calendar_list:
         kind = cal["kind"]
         id = cal["id"]
