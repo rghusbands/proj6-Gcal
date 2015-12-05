@@ -241,12 +241,16 @@ def finalizeMeeting():
         return flask.redirect(flask.url_for("index"))
 
     start_end_tuple = mergeDateRanges(key)
+
     if (start_end_tuple == -1):
         flask.flash("No overlapping dates in date ranges between users")
         collection.remove({})
         return flask.redirect(flask.url_for("index"))
+
     start_date = start_end_tuple['start_date']
     end_date = start_end_tuple['end_date']
+    print(start_date, type(start_date))
+    print(end_date, type(end_date))
 
     all_events_list = getEvents(key)
 
@@ -254,10 +258,20 @@ def finalizeMeeting():
 
     freeTimes(all_events_list, start_date, end_date)
 
-    #clears database
+    return flask.redirect(flask.url_for("index"))
+
+@app.route('/deleteproposal', methods=['POST'])
+def deleteproposal():
+    #clears database of that proposal
+    flask.session.pop('final_proposal', None)
     collection.remove({})
     return flask.redirect(flask.url_for("index"))
 
+@app.route('/goback', methods=['POST'])
+def goback():
+    #goes back without clearing that database
+    flask.session.pop('final_proposal', None)
+    return flask.redirect(flask.url_for("index"))
 
 @app.route('/setrange', methods=['POST'])
 def setrange():
@@ -425,7 +439,8 @@ def mergeDateRanges(key):
     start = starts[-1]
     end = ends[0]
     #changes the end date to work properly in the free times function
-    end = arrow.get(end).replace(hours=+24).isoformat()
+    #end = arrow.get(end).replace(hours=+24).isoformat()
+    end = arrow.get(end).isoformat()
     if start <= end:
         return {'start_date': start, 'end_date': end}
     else:
@@ -438,6 +453,10 @@ def freeTimes(all_events_list, start_date, end_date):
     sorted_events = sortEvents(all_events_list) #sort events
     free_times = getFreeTimes(sorted_events) #gets list of free times
 
+    displayFreeTimes(free_times)
+
+
+def displayFreeTimes(free_times):
     #into a readable format for flask.flash
     for times in free_times:
         message = []
@@ -491,7 +510,8 @@ def eliminateDuplicates(list):
 #add nights as events so free time is from 9am-5pm(normal work day)
 def addNights(list, sd, ed):
     start_date = arrow.get(sd)
-    end_date = arrow.get(ed).replace(hours=-24)
+    #end_date = arrow.get(ed).replace(hours=-24)
+    end_date = arrow.get(ed)
     for day in arrow.Arrow.span_range('day', start_date, end_date): #goes through day range
         early_morning = {'start':day[0], 'end':day[0].replace(hours=+9)}
         late_nights = {'start':day[1].replace(hours=-7).replace(seconds=+.000001), 'end':day[1].replace(seconds=+.000001)}

@@ -28,6 +28,14 @@
 
 {% endif %}
 
+{% if session.final_proposal is defined %}
+    <form action="/goback" method="post">
+        <div class="row">
+            <button class="btn btn-success" type="submit">Go Back</button>
+        </div>
+    </form>
+{% endif %}
+
 {% if not session.final_proposal is defined %}
     <center><h1>Meet Me Project</h1></center>
 
@@ -36,12 +44,12 @@
     <h2>Finalize:</h2>
 </div>
 <div class="row">
-    <i>Please wait until everyone has entered their busy times after giving them the url given below after you submit your busy times. Then press the button with given key so Meet Me Messages displays potential meetings times.
+    <i>Please wait until everyone has entered their busy times after giving them the url given below after you submit your busy times. Then press the button with given key so Meet Me Messages displays potential meetings times. Keep track of your key if you want to check potential meeting times again.
     </i>
 </div>
 <div class="row">
     <form action="/finalizeMeeting" method="post">
-        <input class"col-md-4" name="finalMeetingID" placeholder="MeetingID (ex. 384954)">
+        <input class="col-md-4" name="finalMeetingID" placeholder="MeetingID (ex. 384954)">
         <button class="btn btn-primary" type="submit">Finalize</button>
     </form>
 </div>
@@ -138,7 +146,12 @@
 {% endwith %}
 </div>
 {% if session.final_proposal is defined %}
-    <h4>Please don't refresh the page. Restart server to start over!</h4>
+    <form action="/deleteproposal" method="post">
+        <div class="row">
+            <button class="btn btn-danger" type="submit">Delete Proposal</button>
+        </div>
+    </form>
+    <i>Please don't refresh the page. If you don't delete the proposal you can use the key to look at meetings times again!</i>
 {% endif %}
 
 </div>  <!--container (for bootstrap)-->
