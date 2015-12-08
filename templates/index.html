@@ -97,12 +97,12 @@
 </form>
 </div>
 
-<div class="row">
-    <h2>Calendars:</h2>
-</div>
 
 <div class="row">
 {% if session.calendars is defined  %}
+<div class="row">
+    <h2>Calendars:</h2>
+</div>
   <form action="/select_calendars" method="post">
   {% for cal in session.calendars if cal.selected %}
           <div class="col-md-4">

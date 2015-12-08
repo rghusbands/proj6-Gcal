@@ -60,8 +60,9 @@ def index():
   app.logger.debug("Entering index")
   if 'begin_date' not in flask.session:
     init_session_values()
+  if 'calendars' in flask.session:
+      flask.session.pop('calendars', None)
   return render_template('index.html')
-
 
 @app.route("/choose")
 def choose():
@@ -249,14 +250,18 @@ def finalizeMeeting():
 
     start_date = start_end_tuple['start_date']
     end_date = start_end_tuple['end_date']
-    print(start_date, type(start_date))
-    print(end_date, type(end_date))
 
     all_events_list = getEvents(key)
 
     flask.session['final_proposal'] = 'true'
 
-    freeTimes(all_events_list, start_date, end_date)
+    free_times = freeTimes(all_events_list, start_date, end_date)
+    print(start_date)
+    print(type(start_date))
+    print(end_date)
+    print(type(end_date))
+    print(free_times)
+    displayFreeTimes(free_times)
 
     return flask.redirect(flask.url_for("index"))
 
@@ -264,6 +269,7 @@ def finalizeMeeting():
 def deleteproposal():
     #clears database of that proposal
     flask.session.pop('final_proposal', None)
+    #ideally would only delete specific id number
     collection.remove({})
     return flask.redirect(flask.url_for("index"))
 
@@ -438,8 +444,6 @@ def mergeDateRanges(key):
     ends.sort()
     start = starts[-1]
     end = ends[0]
-    #changes the end date to work properly in the free times function
-    #end = arrow.get(end).replace(hours=+24).isoformat()
     end = arrow.get(end).isoformat()
     if start <= end:
         return {'start_date': start, 'end_date': end}
@@ -452,17 +456,16 @@ def freeTimes(all_events_list, start_date, end_date):
     all_events_list = addNights(all_events_list, start_date, end_date)
     sorted_events = sortEvents(all_events_list) #sort events
     free_times = getFreeTimes(sorted_events) #gets list of free times
-
-    displayFreeTimes(free_times)
+    return free_times
 
 
 def displayFreeTimes(free_times):
     #into a readable format for flask.flash
     for times in free_times:
         message = []
-        message.append(readableDate(times['start']))
+        message.append(readableDate(times[0]))
         message.append(" to ")
-        message.append(readableDate(times['end']))
+        message.append(readableDate(times[1]))
         message = ''.join(message)
         flask.flash(message)
 
@@ -481,7 +484,8 @@ def getFreeTimes(sorted_list):
         event = improved_sorted_list[i]
         next_event = improved_sorted_list[i+1]
         if (event['end'] < next_event['start']):
-            free_times.append({'start':event['end'], 'end':next_event['start']})
+            #put in an ordered list to ensure the same order
+            free_times.append([event['end'], next_event['start']])
     return free_times
 
 
@@ -498,7 +502,7 @@ def eliminateDuplicates(list):
         if (event['end'] > next_event['start'] and event['end'] > next_event['end']):
             new_list.append({'start':event['start'], 'end':event['end']})
             list[i+1]['end'] = event['end'] #prevents problems with next iteration
-        elif (event['end'] > next_event['start']):
+        elif (event['end'] >= next_event['start']):
             new_list.append({'start':event['start'], 'end':next_event['start']})
         else:
             new_list.append({'start':event['start'], 'end':event['end']})
