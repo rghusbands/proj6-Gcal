@@ -256,11 +256,6 @@ def finalizeMeeting():
     flask.session['final_proposal'] = 'true'
 
     free_times = freeTimes(all_events_list, start_date, end_date)
-    print(start_date)
-    print(type(start_date))
-    print(end_date)
-    print(type(end_date))
-    print(free_times)
     displayFreeTimes(free_times)
 
     return flask.redirect(flask.url_for("index"))
@@ -269,8 +264,7 @@ def finalizeMeeting():
 def deleteproposal():
     #clears database of that proposal
     flask.session.pop('final_proposal', None)
-    #ideally would only delete specific id number
-    collection.remove({})
+    collection.remove({ 'id':flask.session['meetingID'] })
     return flask.redirect(flask.url_for("index"))
 
 @app.route('/goback', methods=['POST'])
