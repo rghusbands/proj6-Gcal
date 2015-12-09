@@ -245,7 +245,7 @@ def finalizeMeeting():
 
     if (start_end_tuple == -1):
         flask.flash("No overlapping dates in date ranges between users")
-        collection.remove({})
+        collection.remove({ 'id':key })
         return flask.redirect(flask.url_for("index"))
 
     start_date = start_end_tuple['start_date']
